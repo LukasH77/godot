@@ -2538,7 +2538,10 @@ static void _reset_animation_mixers(Node *p_node, List<Pair<AnimationMixer *, Re
 }
 
 void EditorNode::_save_scene(String p_file, int idx) {
-	ERR_FAIL_COND_MSG(!saving_scene.is_empty() && saving_scene == p_file, "Scene saved while already being saved!");
+	if (saving_scenes.has(p_file)) {
+		scenes_to_resave.insert(p_file);
+		return;
+	}
 
 	Node *scene = editor_data.get_edited_scene_root(idx);
 
@@ -2560,45 +2563,17 @@ void EditorNode::_save_scene(String p_file, int idx) {
 	_reset_animation_mixers(scene, &anim_backups);
 	_save_editor_states(p_file, idx);
 
-	Ref<PackedScene> sdata;
-
-	if (ResourceCache::has(p_file)) {
-		// Something may be referencing this resource and we are good with that.
-		// We must update it, but also let the previous scene state go, as
-		// old version still work for referencing changes in instantiated or inherited scenes.
-
-		sdata = ResourceCache::get_ref(p_file);
-		if (sdata.is_valid()) {
-			sdata->recreate_state();
-		} else {
-			sdata.instantiate();
-		}
-	} else {
-		sdata.instantiate();
-	}
-	Error err = sdata->pack(scene);
-
-	if (err != OK) {
-		show_warning(TTR("Couldn't save scene. Likely dependencies (instances or inheritance) couldn't be satisfied."));
-		return;
-	}
-
-	int flg = 0;
-	if (EDITOR_GET("filesystem/on_save/compress_binary_resources")) {
-		flg |= ResourceSaver::FLAG_COMPRESS;
-	}
-	flg |= ResourceSaver::FLAG_REPLACE_SUBRESOURCE_PATHS;
-
-	err = ResourceSaver::save(sdata, p_file, flg);
-
-	// This needs to be emitted before saving external resources.
-	emit_signal(SNAME("scene_saved"), p_file);
-	editor_data.notify_scene_saved(p_file);
+	Error err = _save_scene_core(p_file, scene);
 
 	_save_external_resources();
-	saving_scene = p_file; // Some editors may save scenes of built-in resources as external data, so avoid saving this scene again.
+	saving_scenes.insert(p_file); // Some editors may save scenes of built-in resources as external data, so avoid saving this scene again.
 	editor_data.save_editor_external_data();
-	saving_scene = "";
+	saving_scenes.erase(p_file);
+
+	// Erase first to make sure the resave request is consumed.
+	if (scenes_to_resave.erase(p_file) && err == OK) {
+		err = _save_scene_core(p_file, scene);
+	}
 
 	for (Pair<AnimationMixer *, Ref<AnimatedValuesBackup>> &E : anim_backups) {
 		E.first->restore(E.second);
@@ -2631,6 +2606,45 @@ void EditorNode::_save_scene(String p_file, int idx) {
 
 	scene->propagate_notification(NOTIFICATION_EDITOR_POST_SAVE);
 	_update_unsaved_cache();
+}
+
+Error EditorNode::_save_scene_core(String p_file, Node *scene) {
+	Ref<PackedScene> sdata;
+
+	if (ResourceCache::has(p_file)) {
+		// Something may be referencing this resource and we are good with that.
+		// We must update it, but also let the previous scene state go, as
+		// old version still work for referencing changes in instantiated or inherited scenes.
+
+		sdata = ResourceCache::get_ref(p_file);
+		if (sdata.is_valid()) {
+			sdata->recreate_state();
+		} else {
+			sdata.instantiate();
+		}
+	} else {
+		sdata.instantiate();
+	}
+	Error err = sdata->pack(scene);
+
+	if (err != OK) {
+		show_warning(TTR("Couldn't save scene. Likely dependencies (instances or inheritance) couldn't be satisfied."));
+		return err;
+	}
+
+	int flg = 0;
+	if (EDITOR_GET("filesystem/on_save/compress_binary_resources")) {
+		flg |= ResourceSaver::FLAG_COMPRESS;
+	}
+	flg |= ResourceSaver::FLAG_REPLACE_SUBRESOURCE_PATHS;
+
+	err = ResourceSaver::save(sdata, p_file, flg);
+
+	// This needs to be emitted before saving external resources.
+	emit_signal(SNAME("scene_saved"), p_file);
+	editor_data.notify_scene_saved(p_file);
+
+	return err;
 }
 
 void EditorNode::save_all_scenes() {

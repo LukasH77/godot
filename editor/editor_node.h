@@ -481,7 +481,8 @@ private:
 	uint64_t update_spinner_step_frame = 0;
 	int update_spinner_step = 0;
 
-	String saving_scene;
+	HashSet<String> saving_scenes;
+	HashSet<String> scenes_to_resave;
 	EditorProgress *save_scene_progress = nullptr;
 
 	DynamicFontImportSettingsDialog *fontdata_import_settings = nullptr;
@@ -614,6 +615,7 @@ private:
 	void _nav_to_selected_scene();
 	bool _validate_scene_recursive(const String &p_filename, Node *p_node);
 	void _save_scene(String p_file, int idx = -1);
+	Error _save_scene_core(String p_file, Node *scene);
 	void _save_all_scenes();
 	int _next_unsaved_scene(bool p_valid_filename, int p_start = 0);
 	void _discard_changes(const String &p_str = String());
