@@ -2785,8 +2785,10 @@ void DocumentEditorContainer::save_all_scripts() {
 		}
 
 		_auto_format_text(seb);
+		print_line("autoformatting");
 
 		if (!seb->is_unsaved()) {
+			print_line("not unsaved");
 			continue;
 		}
 

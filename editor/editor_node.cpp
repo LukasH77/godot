@@ -2432,6 +2432,7 @@ bool EditorNode::_validate_scene_recursive(const String &p_filename, Node *p_nod
 }
 
 int EditorNode::_save_external_resources(bool p_also_save_external_data) {
+	print_line("EXECUTING _save_external_resources\n");
 	// Save external resources and its subresources if any was modified.
 
 	int flg = 0;
@@ -2538,6 +2539,10 @@ static void _reset_animation_mixers(Node *p_node, List<Pair<AnimationMixer *, Re
 }
 
 void EditorNode::_save_scene(String p_file, int idx) {
+	print_line("SAVING SCENE IN **_save_scene**");
+	print_line("idx: ", idx);
+	print_line("p_file: ", p_file);
+	print_line("skipping reentrant save for ", p_file);
 	if (saving_scenes.has(p_file)) {
 		scenes_to_resave.insert(p_file);
 		return;
@@ -2664,6 +2669,7 @@ void EditorNode::save_scene_list(const HashSet<String> &p_scene_paths) {
 		Node *scene = editor_data.get_edited_scene_root(i);
 
 		if (scene && p_scene_paths.has(scene->get_scene_file_path())) {
+			print_line("saving scene list for scene ", i, " with path ", scene->get_scene_file_path());
 			_save_scene(scene->get_scene_file_path(), i);
 		}
 	}
